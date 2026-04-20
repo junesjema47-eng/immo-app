@@ -232,6 +232,7 @@ const styles: Record<string, CSSProperties> = {
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
   },
+  
   input: {
     width: '100%',
     padding: '12px 14px',
@@ -241,6 +242,9 @@ const styles: Record<string, CSSProperties> = {
     outline: 'none',
     boxSizing: 'border-box',
     background: '#fafafa',
+    color: '#1a1a1a',
+  },
+
   },
   fehler: {
     color: '#e53e3e',
