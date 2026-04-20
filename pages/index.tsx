@@ -9,13 +9,22 @@ export default function Home() {
   const [ort, setOrt] = useState('')
   const [budget, setBudget] = useState('')
   const [immobilienart, setImmobilienart] = useState('')
+  const [email, setEmail] = useState('')
+  const [telefon, setTelefon] = useState('')
+  const [groesse, setGroesse] = useState('')
+  const [zimmer, setZimmer] = useState('')
+  const [beschreibung, setBeschreibung] = useState('')
   const [gesendet, setGesendet] = useState(false)
   const [laden, setLaden] = useState(false)
   const [fehler, setFehler] = useState<string | null>(null)
 
   const handleSubmit = async () => {
-    if (!ort || !budget || !immobilienart) {
-      setFehler('Bitte alle Felder ausfüllen.')
+    if (!ort || !budget || !immobilienart || !email) {
+      setFehler('Bitte Ort, Budget, Immobilienart und E-Mail ausfüllen.')
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setFehler('Bitte eine gültige E-Mail-Adresse eingeben.')
       return
     }
     setLaden(true)
@@ -23,7 +32,17 @@ export default function Home() {
 
     const { error } = await supabase
       .from('inserate')
-      .insert([{ rolle, ort, budget, immobilienart }])
+      .insert([{
+        rolle,
+        ort,
+        budget,
+        immobilienart,
+        email,
+        telefon: telefon || null,
+        groesse: groesse || null,
+        zimmer: zimmer || null,
+        beschreibung: beschreibung || null,
+      }])
 
     if (error) {
       setFehler('Fehler beim Speichern. Bitte nochmal versuchen.')
@@ -39,6 +58,11 @@ export default function Home() {
     setOrt('')
     setBudget('')
     setImmobilienart('')
+    setEmail('')
+    setTelefon('')
+    setGroesse('')
+    setZimmer('')
+    setBeschreibung('')
     setGesendet(false)
     setFehler(null)
   }
@@ -52,7 +76,7 @@ export default function Home() {
         {gesendet && (
           <div style={styles.erfolg}>
             <p style={{ fontSize: 40, margin: 0 }}>✅</p>
-            <p style={{ fontWeight: 'bold', fontSize: 18 }}>Erfolgreich gespeichert!</p>
+            <p style={{ fontWeight: 'bold', fontSize: 18, color: '#1a1a1a' }}>Erfolgreich gespeichert!</p>
             <p style={{ color: '#555' }}>
               {rolle === 'suche'
                 ? 'Wir melden uns wenn passende Objekte verfügbar sind.'
@@ -86,7 +110,7 @@ export default function Home() {
             </p>
 
             <div style={styles.formGroup}>
-              <label style={styles.label}>Ort</label>
+              <label style={styles.label}>Ort *</label>
               <input
                 style={styles.input}
                 placeholder="z. B. Berlin, München, Hamburg..."
@@ -97,7 +121,7 @@ export default function Home() {
 
             <div style={styles.formGroup}>
               <label style={styles.label}>
-                {rolle === 'suche' ? 'Budget (€)' : 'Preis (€)'}
+                {rolle === 'suche' ? 'Budget (€) *' : 'Preis (€) *'}
               </label>
               <input
                 style={styles.input}
@@ -108,7 +132,7 @@ export default function Home() {
             </div>
 
             <div style={styles.formGroup}>
-              <label style={styles.label}>Immobilienart</label>
+              <label style={styles.label}>Immobilienart *</label>
               <select
                 style={styles.input}
                 value={immobilienart}
@@ -123,6 +147,68 @@ export default function Home() {
                 <option>Pflegeimmobilie</option>
                 <option>Ferienimmobilie</option>
               </select>
+            </div>
+
+            <div style={styles.zweierReihe}>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Größe (m²)</label>
+                <input
+                  style={styles.input}
+                  placeholder="z. B. 85"
+                  value={groesse}
+                  onChange={(e) => setGroesse(e.target.value)}
+                />
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Zimmer</label>
+                <input
+                  style={styles.input}
+                  placeholder="z. B. 3"
+                  value={zimmer}
+                  onChange={(e) => setZimmer(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>
+                {rolle === 'suche' ? 'Deine Wünsche' : 'Beschreibung'}
+              </label>
+              <textarea
+                style={styles.textarea}
+                placeholder={
+                  rolle === 'suche'
+                    ? 'z. B. Balkon, Altbau, Nähe S-Bahn...'
+                    : 'z. B. Renoviert 2022, Süd-Balkon, Tiefgarage...'
+                }
+                value={beschreibung}
+                onChange={(e) => setBeschreibung(e.target.value)}
+                rows={3}
+              />
+            </div>
+
+            <p style={styles.sektion}>Deine Kontaktdaten</p>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>E-Mail *</label>
+              <input
+                style={styles.input}
+                type="email"
+                placeholder="du@beispiel.de"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Telefon</label>
+              <input
+                style={styles.input}
+                type="tel"
+                placeholder="optional"
+                value={telefon}
+                onChange={(e) => setTelefon(e.target.value)}
+              />
             </div>
 
             {fehler && <p style={styles.fehler}>{fehler}</p>}
@@ -222,6 +308,11 @@ const styles: Record<string, CSSProperties> = {
   },
   formGroup: {
     marginBottom: 18,
+    flex: 1,
+  },
+  zweierReihe: {
+    display: 'flex',
+    gap: 12,
   },
   label: {
     display: 'block',
@@ -231,6 +322,15 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 6,
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
+  },
+  sektion: {
+    fontSize: 14,
+    fontWeight: 700,
+    color: '#1a1a1a',
+    marginTop: 24,
+    marginBottom: 12,
+    paddingTop: 16,
+    borderTop: '1px solid #e2e8f0',
   },
   input: {
     width: '100%',
@@ -242,6 +342,19 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: 'border-box',
     background: '#fafafa',
     color: '#1a1a1a',
+  },
+  textarea: {
+    width: '100%',
+    padding: '12px 14px',
+    borderRadius: 10,
+    border: '1.5px solid #e2e8f0',
+    fontSize: 15,
+    outline: 'none',
+    boxSizing: 'border-box',
+    background: '#fafafa',
+    color: '#1a1a1a',
+    fontFamily: 'system-ui, sans-serif',
+    resize: 'vertical',
   },
   fehler: {
     color: '#e53e3e',
