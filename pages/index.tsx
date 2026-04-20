@@ -1,14 +1,17 @@
 import { useState } from 'react'
+import type { CSSProperties } from 'react'
 import supabase from '../lib/supabaseClient'
 
+type Rolle = 'suche' | 'biete' | null
+
 export default function Home() {
-  const [rolle, setRolle] = useState(null)
+  const [rolle, setRolle] = useState<Rolle>(null)
   const [ort, setOrt] = useState('')
   const [budget, setBudget] = useState('')
   const [immobilienart, setImmobilienart] = useState('')
   const [gesendet, setGesendet] = useState(false)
   const [laden, setLaden] = useState(false)
-  const [fehler, setFehler] = useState('')
+  const [fehler, setFehler] = useState<string | null>(null)
 
   const handleSubmit = async () => {
     if (!ort || !budget || !immobilienart) {
@@ -141,7 +144,7 @@ export default function Home() {
   )
 }
 
-const styles = {
+const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: '100vh',
     background: '#f0f2f5',
