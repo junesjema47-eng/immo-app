@@ -8,7 +8,7 @@ export default function Home() {
   const [immobilienart, setImmobilienart] = useState('')
   const [gesendet, setGesendet] = useState(false)
   const [laden, setLaden] = useState(false)
-  const [fehler, setFehler] = useState(null)
+  const [fehler, setFehler] = useState('')
 
   const handleSubmit = async () => {
     if (!ort || !budget || !immobilienart) {
