@@ -1,130 +1,264 @@
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { CSSProperties } from 'react'
 import Link from 'next/link'
 import supabase from '../../lib/supabaseClient'
 
 type Inserat = {
-  id: number
+  id: string
   created_at: string
   rolle: 'suche' | 'biete'
   ort: string
   budget: string
   immobilienart: string
-  email: string
-  telefon: string | null
-  groesse: string | null
-  zimmer: string | null
-  beschreibung: string | null
-  bilder: string[] | null
+  email?: string
+  telefon?: string
+  groesse?: string
+  zimmer?: string
+  beschreibung?: string
+  bilder?: string[]
 }
 
-type FilterWert = 'alle' | 'suche' | 'biete'
+type RolleFilter = 'alle' | 'suche' | 'biete'
+type Sortierung = 'neueste' | 'guenstigste' | 'teuerste' | 'groesste'
 
-export default function Inserate() {
+const IMMOBILIENARTEN = [
+  'Eigentumswohnung',
+  'Mehrfamilienhaus',
+  'Einfamilienhaus',
+  'Gewerbeimmobilie',
+  'Grundstück',
+  'Pflegeimmobilie',
+  'Ferienimmobilie',
+]
+
+const parsePreis = (s?: string) => {
+  if (!s) return 0
+  return parseFloat(s.replace(/[^\d]/g, '')) || 0
+}
+
+const formatPreis = (s?: string) => {
+  const n = parsePreis(s)
+  if (!n) return s || '-'
+  return n.toLocaleString('de-DE') + ' €'
+}
+
+export default function InserateListe() {
   const [inserate, setInserate] = useState<Inserat[]>([])
   const [laden, setLaden] = useState(true)
-  const [fehler, setFehler] = useState<string | null>(null)
-  const [filter, setFilter] = useState<FilterWert>('alle')
+
+  const [suchtext, setSuchtext] = useState('')
+  const [rolleFilter, setRolleFilter] = useState<RolleFilter>('alle')
+  const [immobilienart, setImmobilienart] = useState('')
+  const [preisMin, setPreisMin] = useState('')
+  const [preisMax, setPreisMax] = useState('')
+  const [sortierung, setSortierung] = useState<Sortierung>('neueste')
 
   useEffect(() => {
-    async function load() {
+    const load = async () => {
       const { data, error } = await supabase
         .from('inserate')
         .select('*')
         .order('created_at', { ascending: false })
-
-      if (error) {
-        setFehler('Fehler beim Laden der Inserate.')
-        console.error(error)
-      } else {
-        setInserate((data as Inserat[]) ?? [])
-      }
+      if (!error && data) setInserate(data as Inserat[])
       setLaden(false)
     }
     load()
   }, [])
 
-  const anzahlSuche = inserate.filter((i) => i.rolle === 'suche').length
-  const anzahlBiete = inserate.filter((i) => i.rolle === 'biete').length
-  const gefiltert = inserate.filter((i) => filter === 'alle' ? true : i.rolle === filter)
+  const gefiltert = inserate.filter((i) => {
+    if (rolleFilter !== 'alle' && i.rolle !== rolleFilter) return false
+    if (immobilienart && i.immobilienart !== immobilienart) return false
+
+    if (suchtext) {
+      const s = suchtext.toLowerCase()
+      const match =
+        i.ort?.toLowerCase().includes(s) ||
+        i.beschreibung?.toLowerCase().includes(s) ||
+        i.immobilienart?.toLowerCase().includes(s)
+      if (!match) return false
+    }
+
+    const preis = parsePreis(i.budget)
+    if (preisMin && preis < parsePreis(preisMin)) return false
+    if (preisMax && preis > parsePreis(preisMax)) return false
+
+    return true
+  })
+
+  const sortiert = [...gefiltert].sort((a, b) => {
+    if (sortierung === 'neueste') {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    }
+    if (sortierung === 'guenstigste') return parsePreis(a.budget) - parsePreis(b.budget)
+    if (sortierung === 'teuerste') return parsePreis(b.budget) - parsePreis(a.budget)
+    if (sortierung === 'groesste') {
+      return (parseFloat(b.groesse || '0') || 0) - (parseFloat(a.groesse || '0') || 0)
+    }
+    return 0
+  })
+
+  const reset = () => {
+    setSuchtext('')
+    setRolleFilter('alle')
+    setImmobilienart('')
+    setPreisMin('')
+    setPreisMax('')
+    setSortierung('neueste')
+  }
+
+  const hatFilter =
+    suchtext || rolleFilter !== 'alle' || immobilienart || preisMin || preisMax
 
   return (
     <div style={styles.page}>
       <div style={styles.container}>
         <header style={styles.header}>
-          <Link href="/" style={styles.logo}>
-            🏠 Immo-Plattform
-          </Link>
-          <Link href="/" style={styles.neuBtn}>
-            + Neues Inserat
-          </Link>
+          <Link href="/" style={styles.logo}>🏠 Immo-Plattform</Link>
+          <Link href="/" style={styles.newBtn}>+ Neues Inserat</Link>
         </header>
 
-        <h1 style={styles.h1}>Alle Inserate</h1>
+        <h1 style={styles.titel}>Alle Inserate</h1>
 
-        <div style={styles.filters}>
-          <button
-            style={filter === 'alle' ? styles.filterActive : styles.filter}
-            onClick={() => setFilter('alle')}
-          >
-            Alle ({inserate.length})
-          </button>
-          <button
-            style={filter === 'suche' ? styles.filterActive : styles.filter}
-            onClick={() => setFilter('suche')}
-          >
-            🔍 Gesuche ({anzahlSuche})
-          </button>
-          <button
-            style={filter === 'biete' ? styles.filterActive : styles.filter}
-            onClick={() => setFilter('biete')}
-          >
-            🏢 Angebote ({anzahlBiete})
-          </button>
+        <div style={styles.filterCard}>
+          <div style={styles.topRow}>
+            <input
+              style={styles.suche}
+              placeholder="🔍 Suchen nach Ort, Beschreibung..."
+              value={suchtext}
+              onChange={(e) => setSuchtext(e.target.value)}
+            />
+            <select
+              style={styles.sortierung}
+              value={sortierung}
+              onChange={(e) => setSortierung(e.target.value as Sortierung)}
+            >
+              <option value="neueste">Neueste zuerst</option>
+              <option value="guenstigste">Günstigste zuerst</option>
+              <option value="teuerste">Teuerste zuerst</option>
+              <option value="groesste">Größte zuerst</option>
+            </select>
+          </div>
+
+          <div style={styles.toggleReihe}>
+            <button
+              style={rolleFilter === 'alle' ? styles.toggleAktiv : styles.toggle}
+              onClick={() => setRolleFilter('alle')}
+            >
+              Alle
+            </button>
+            <button
+              style={rolleFilter === 'suche' ? styles.toggleAktiv : styles.toggle}
+              onClick={() => setRolleFilter('suche')}
+            >
+              🔍 Gesuche
+            </button>
+            <button
+              style={rolleFilter === 'biete' ? styles.toggleAktiv : styles.toggle}
+              onClick={() => setRolleFilter('biete')}
+            >
+              🏢 Angebote
+            </button>
+          </div>
+
+          <div style={styles.filterReihe}>
+            <select
+              style={styles.filterInput}
+              value={immobilienart}
+              onChange={(e) => setImmobilienart(e.target.value)}
+            >
+              <option value="">Alle Arten</option>
+              {IMMOBILIENARTEN.map((a) => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
+            <input
+              style={styles.filterInput}
+              placeholder="Preis min (€)"
+              value={preisMin}
+              onChange={(e) => setPreisMin(e.target.value.replace(/[^\d]/g, ''))}
+            />
+            <input
+              style={styles.filterInput}
+              placeholder="Preis max (€)"
+              value={preisMax}
+              onChange={(e) => setPreisMax(e.target.value.replace(/[^\d]/g, ''))}
+            />
+            {hatFilter && (
+              <button style={styles.resetBtn} onClick={reset}>
+                ✕ Zurücksetzen
+              </button>
+            )}
+          </div>
         </div>
 
-        {laden && <p style={styles.info}>Lade Inserate...</p>}
-        {fehler && <p style={styles.fehlerText}>{fehler}</p>}
-        {!laden && !fehler && gefiltert.length === 0 && (
-          <p style={styles.info}>Noch keine Inserate in dieser Kategorie.</p>
+        <p style={styles.counter}>
+          {laden
+            ? 'Lädt...'
+            : sortiert.length === 0
+            ? 'Keine Inserate gefunden'
+            : `${sortiert.length} ${sortiert.length === 1 ? 'Inserat' : 'Inserate'} gefunden`}
+        </p>
+
+        {!laden && sortiert.length === 0 && (
+          <div style={styles.leerZustand}>
+            <p style={styles.leerEmoji}>🤷</p>
+            <p style={styles.leerText}>
+              Keine Inserate passen zu deinen Filtern.
+            </p>
+            {hatFilter && (
+              <button style={styles.leerBtn} onClick={reset}>
+                Filter zurücksetzen
+              </button>
+            )}
+          </div>
         )}
 
-        <div style={styles.grid}>
-          {gefiltert.map((i) => (
-            <Link key={i.id} href={`/inserate/${i.id}`} style={styles.cardLink}>
-              <div style={styles.card}>
-                {i.bilder && i.bilder.length > 0 ? (
-                  <div style={styles.imageWrapper}>
-                    <img src={i.bilder[0]} style={styles.cardImage} alt={i.immobilienart} />
-                    {i.bilder.length > 1 && (
-                      <span style={styles.imageCount}>+{i.bilder.length - 1}</span>
-                    )}
-                  </div>
-                ) : (
-                  <div style={styles.placeholderImage}>🏠</div>
-                )}
-                <div style={styles.cardContent}>
-                  <div style={i.rolle === 'suche' ? styles.badgeSuche : styles.badgeBiete}>
-                    {i.rolle === 'suche' ? '🔍 Sucht' : '🏢 Bietet'}
-                  </div>
-                  <h3 style={styles.cardTitel}>{i.immobilienart}</h3>
-                  <p style={styles.cardOrt}>📍 {i.ort}</p>
-                  <p style={styles.cardBudget}>
-                    {i.rolle === 'suche' ? 'Budget' : 'Preis'}: {i.budget} €
-                  </p>
-                  {(i.groesse || i.zimmer) && (
-                    <p style={styles.cardMeta}>
-                      {i.groesse && `${i.groesse} m²`}
-                      {i.groesse && i.zimmer && ' · '}
-                      {i.zimmer && `${i.zimmer} Zimmer`}
-                    </p>
+        {sortiert.length > 0 && (
+          <div style={styles.grid}>
+            {sortiert.map((i) => (
+              <Link
+                key={i.id}
+                href={`/inserate/${i.id}`}
+                style={styles.kartenLink}
+              >
+                <div style={styles.karte}>
+                  {i.bilder && i.bilder.length > 0 ? (
+                    <div style={styles.bildWrapper}>
+                      <img src={i.bilder[0]} alt="" style={styles.bild} />
+                      {i.bilder.length > 1 && (
+                        <span style={styles.bildBadge}>+{i.bilder.length - 1}</span>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={styles.bildPlatzhalter}>🏠</div>
                   )}
-                  <p style={styles.mehr}>Mehr anzeigen →</p>
+
+                  <div style={styles.info}>
+                    <span
+                      style={i.rolle === 'suche' ? styles.badgeSuche : styles.badgeBiete}
+                    >
+                      {i.rolle === 'suche' ? '🔍 Gesucht' : '🏢 Geboten'}
+                    </span>
+
+                    <h3 style={styles.kartenTitel}>{i.immobilienart}</h3>
+                    <p style={styles.kartenOrt}>📍 {i.ort}</p>
+                    <p style={styles.kartenPreis}>{formatPreis(i.budget)}</p>
+
+                    {(i.groesse || i.zimmer) && (
+                      <p style={styles.kartenMeta}>
+                        {i.groesse && `${i.groesse} m²`}
+                        {i.groesse && i.zimmer && ' · '}
+                        {i.zimmer && `${i.zimmer} Zi.`}
+                      </p>
+                    )}
+
+                    <p style={styles.mehr}>Mehr anzeigen →</p>
+                  </div>
                 </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -135,7 +269,7 @@ const styles: Record<string, CSSProperties> = {
     minHeight: '100vh',
     background: '#f0f2f5',
     fontFamily: 'system-ui, sans-serif',
-    padding: '24px 16px',
+    padding: '20px',
   },
   container: {
     maxWidth: 1200,
@@ -145,50 +279,81 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 32,
-    flexWrap: 'wrap',
-    gap: 12,
+    padding: '20px 0',
   },
   logo: {
     fontSize: 20,
     fontWeight: 700,
-    color: '#1a1a1a',
     textDecoration: 'none',
+    color: '#1a1a1a',
   },
-  neuBtn: {
+  newBtn: {
     padding: '10px 18px',
-    borderRadius: 10,
     background: '#1a1a1a',
     color: '#fff',
+    borderRadius: 10,
+    textDecoration: 'none',
     fontSize: 14,
     fontWeight: 600,
-    textDecoration: 'none',
   },
-  h1: {
-    fontSize: 32,
+  titel: {
+    fontSize: 28,
     fontWeight: 700,
+    marginBottom: 20,
     color: '#1a1a1a',
-    margin: '0 0 24px 0',
   },
-  filters: {
+  filterCard: {
+    background: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
+  },
+  topRow: {
+    display: 'flex',
+    gap: 10,
+    marginBottom: 14,
+    flexWrap: 'wrap' as const,
+  },
+  suche: {
+    flex: '1 1 300px',
+    padding: '12px 14px',
+    borderRadius: 10,
+    border: '1.5px solid #e2e8f0',
+    fontSize: 15,
+    outline: 'none',
+    color: '#1a1a1a',
+    background: '#fafafa',
+  },
+  sortierung: {
+    padding: '12px 14px',
+    borderRadius: 10,
+    border: '1.5px solid #e2e8f0',
+    fontSize: 14,
+    outline: 'none',
+    color: '#1a1a1a',
+    background: '#fff',
+    cursor: 'pointer',
+  },
+  toggleReihe: {
     display: 'flex',
     gap: 8,
-    marginBottom: 24,
-    flexWrap: 'wrap',
+    marginBottom: 14,
+    flexWrap: 'wrap' as const,
   },
-  filter: {
-    padding: '8px 16px',
-    borderRadius: 20,
+  toggle: {
+    padding: '8px 14px',
+    borderRadius: 8,
     border: '1.5px solid #e2e8f0',
     background: '#fff',
     color: '#555',
     fontSize: 14,
-    fontWeight: 600,
+    fontWeight: 500,
     cursor: 'pointer',
   },
-  filterActive: {
-    padding: '8px 16px',
-    borderRadius: 20,
+  toggleAktiv: {
+    padding: '8px 14px',
+    borderRadius: 8,
     border: '1.5px solid #1a1a1a',
     background: '#1a1a1a',
     color: '#fff',
@@ -196,119 +361,175 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 600,
     cursor: 'pointer',
   },
-  info: {
-    color: '#888',
-    textAlign: 'center',
-    padding: '40px 0',
+  filterReihe: {
+    display: 'flex',
+    gap: 10,
+    flexWrap: 'wrap' as const,
+    alignItems: 'center',
   },
-  fehlerText: {
-    color: '#e53e3e',
-    textAlign: 'center',
-    padding: '40px 0',
+  filterInput: {
+    flex: '1 1 150px',
+    padding: '10px 12px',
+    borderRadius: 10,
+    border: '1.5px solid #e2e8f0',
+    fontSize: 14,
+    outline: 'none',
+    color: '#1a1a1a',
+    background: '#fafafa',
+  },
+  resetBtn: {
+    padding: '10px 14px',
+    borderRadius: 10,
+    border: '1.5px solid #fecaca',
+    background: '#fef2f2',
+    color: '#b91c1c',
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  counter: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+  },
+  leerZustand: {
+    background: '#fff',
+    borderRadius: 16,
+    padding: '60px 20px',
+    textAlign: 'center' as const,
+    boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
+  },
+  leerEmoji: {
+    fontSize: 56,
+    margin: 0,
+  },
+  leerText: {
+    fontSize: 16,
+    color: '#555',
+    marginTop: 12,
+    marginBottom: 20,
+  },
+  leerBtn: {
+    padding: '12px 24px',
+    borderRadius: 10,
+    border: 'none',
+    background: '#1a1a1a',
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: 'pointer',
   },
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-    gap: 16,
+    gap: 20,
   },
-  cardLink: {
+  kartenLink: {
     textDecoration: 'none',
     color: 'inherit',
   },
-  card: {
+  karte: {
     background: '#fff',
     borderRadius: 14,
-    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
     overflow: 'hidden',
+    boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+    transition: 'transform 0.15s, box-shadow 0.15s',
+    cursor: 'pointer',
+    height: '100%',
     display: 'flex',
     flexDirection: 'column',
-    cursor: 'pointer',
-    transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-    height: '100%',
   },
-  imageWrapper: {
+  bildWrapper: {
     position: 'relative',
     width: '100%',
     height: 180,
+    background: '#f0f2f5',
     overflow: 'hidden',
   },
-  cardImage: {
+  bild: {
     width: '100%',
     height: '100%',
     objectFit: 'cover',
   },
-  imageCount: {
+  bildBadge: {
     position: 'absolute',
     bottom: 10,
     right: 10,
-    padding: '4px 10px',
-    borderRadius: 20,
     background: 'rgba(0,0,0,0.7)',
     color: '#fff',
+    padding: '4px 10px',
+    borderRadius: 20,
     fontSize: 12,
     fontWeight: 600,
   },
-  placeholderImage: {
+  bildPlatzhalter: {
     width: '100%',
     height: 180,
     background: '#f0f2f5',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 60,
+    fontSize: 48,
   },
-  cardContent: {
-    padding: 20,
+  info: {
+    padding: 16,
     display: 'flex',
     flexDirection: 'column',
-    gap: 8,
+    flex: 1,
   },
   badgeSuche: {
-    alignSelf: 'flex-start',
+    display: 'inline-block',
+    fontSize: 12,
+    fontWeight: 600,
     padding: '4px 10px',
     borderRadius: 20,
     background: '#f0fdf8',
     color: '#065f46',
-    fontSize: 12,
-    fontWeight: 700,
-    marginBottom: 8,
+    marginBottom: 10,
+    alignSelf: 'flex-start',
   },
   badgeBiete: {
-    alignSelf: 'flex-start',
+    display: 'inline-block',
+    fontSize: 12,
+    fontWeight: 600,
     padding: '4px 10px',
     borderRadius: 20,
     background: '#fffbeb',
     color: '#78350f',
-    fontSize: 12,
+    marginBottom: 10,
+    alignSelf: 'flex-start',
+  },
+  kartenTitel: {
+    fontSize: 17,
     fontWeight: 700,
+    margin: 0,
+    marginBottom: 4,
+    color: '#1a1a1a',
+  },
+  kartenOrt: {
+    fontSize: 14,
+    color: '#555',
+    margin: 0,
     marginBottom: 8,
   },
-  cardTitel: {
+  kartenPreis: {
     fontSize: 18,
     fontWeight: 700,
     color: '#1a1a1a',
     margin: 0,
+    marginBottom: 4,
   },
-  cardOrt: {
-    fontSize: 14,
-    color: '#555',
-    margin: 0,
-  },
-  cardBudget: {
-    fontSize: 16,
-    fontWeight: 600,
-    color: '#1a1a1a',
-    margin: '4px 0',
-  },
-  cardMeta: {
+  kartenMeta: {
     fontSize: 13,
-    color: '#666',
+    color: '#888',
     margin: 0,
+    marginBottom: 10,
   },
   mehr: {
     fontSize: 13,
     color: '#1a1a1a',
     fontWeight: 600,
-    marginTop: 10,
+    margin: 0,
+    marginTop: 'auto',
   },
 }

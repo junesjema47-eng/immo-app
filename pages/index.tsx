@@ -1,277 +1,321 @@
-import { useState, useEffect } from 'react'
-import type { CSSProperties } from 'react'
+import { useState } from 'react'
+import type { CSSProperties, ChangeEvent } from 'react'
 import Link from 'next/link'
-import supabase from '../../lib/supabaseClient'
+import supabase from '../lib/supabaseClient'
 
-type Inserat = {
-  id: string
-  created_at: string
-  rolle: 'suche' | 'biete'
-  ort: string
-  budget: string
-  immobilienart: string
-  email?: string
-  telefon?: string
-  groesse?: string
-  zimmer?: string
-  beschreibung?: string
-  bilder?: string[]
-}
+type Rolle = 'suche' | 'biete' | null
 
-type RolleFilter = 'alle' | 'suche' | 'biete'
-type Sortierung = 'neueste' | 'guenstigste' | 'teuerste' | 'groesste'
+const MAX_BILDER = 5
+const MAX_GROESSE_MB = 10
 
-const IMMOBILIENARTEN = [
-  'Eigentumswohnung',
-  'Mehrfamilienhaus',
-  'Einfamilienhaus',
-  'Gewerbeimmobilie',
-  'Grundstück',
-  'Pflegeimmobilie',
-  'Ferienimmobilie',
-]
-
-// Parst "300.000 €" → 300000
-const parsePreis = (s?: string) => {
-  if (!s) return 0
-  return parseFloat(s.replace(/[^\d]/g, '')) || 0
-}
-
-// Formatiert 300000 → "300.000 €"
-const formatPreis = (s?: string) => {
-  const n = parsePreis(s)
-  if (!n) return s || '-'
-  return n.toLocaleString('de-DE') + ' €'
-}
-
-export default function InserateListe() {
-  const [inserate, setInserate] = useState<Inserat[]>([])
-  const [laden, setLaden] = useState(true)
-
-  // Filter-States
-  const [suchtext, setSuchtext] = useState('')
-  const [rolleFilter, setRolleFilter] = useState<RolleFilter>('alle')
+export default function Home() {
+  const [rolle, setRolle] = useState<Rolle>(null)
+  const [ort, setOrt] = useState('')
+  const [budget, setBudget] = useState('')
   const [immobilienart, setImmobilienart] = useState('')
-  const [preisMin, setPreisMin] = useState('')
-  const [preisMax, setPreisMax] = useState('')
-  const [sortierung, setSortierung] = useState<Sortierung>('neueste')
+  const [email, setEmail] = useState('')
+  const [telefon, setTelefon] = useState('')
+  const [groesse, setGroesse] = useState('')
+  const [zimmer, setZimmer] = useState('')
+  const [beschreibung, setBeschreibung] = useState('')
+  const [bilder, setBilder] = useState<string[]>([])
+  const [uploadLaden, setUploadLaden] = useState(false)
+  const [gesendet, setGesendet] = useState(false)
+  const [laden, setLaden] = useState(false)
+  const [fehler, setFehler] = useState<string | null>(null)
 
-  useEffect(() => {
-    const load = async () => {
-      const { data, error } = await supabase
-        .from('inserate')
-        .select('*')
-        .order('created_at', { ascending: false })
-      if (!error && data) setInserate(data as Inserat[])
-      setLaden(false)
-    }
-    load()
-  }, [])
+  const handleUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
 
-  // Filter anwenden
-  const gefiltert = inserate.filter((i) => {
-    if (rolleFilter !== 'alle' && i.rolle !== rolleFilter) return false
-    if (immobilienart && i.immobilienart !== immobilienart) return false
-
-    if (suchtext) {
-      const s = suchtext.toLowerCase()
-      const match =
-        i.ort?.toLowerCase().includes(s) ||
-        i.beschreibung?.toLowerCase().includes(s) ||
-        i.immobilienart?.toLowerCase().includes(s)
-      if (!match) return false
+    if (bilder.length + files.length > MAX_BILDER) {
+      setFehler(`Maximal ${MAX_BILDER} Bilder pro Inserat.`)
+      return
     }
 
-    const preis = parsePreis(i.budget)
-    if (preisMin && preis < parsePreis(preisMin)) return false
-    if (preisMax && preis > parsePreis(preisMax)) return false
+    setUploadLaden(true)
+    setFehler(null)
+    const neueUrls: string[] = []
 
-    return true
-  })
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
 
-  // Sortieren
-  const sortiert = [...gefiltert].sort((a, b) => {
-    if (sortierung === 'neueste') {
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      if (file.size > MAX_GROESSE_MB * 1024 * 1024) {
+        setFehler(`"${file.name}" ist zu groß (max. ${MAX_GROESSE_MB} MB).`)
+        continue
+      }
+
+      const ext = file.name.split('.').pop()
+      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('inserat-bilder')
+        .upload(fileName, file)
+
+      if (uploadError) {
+        console.error(uploadError)
+        setFehler('Upload fehlgeschlagen: ' + uploadError.message)
+        continue
+      }
+
+      const { data } = supabase.storage
+        .from('inserat-bilder')
+        .getPublicUrl(fileName)
+
+      neueUrls.push(data.publicUrl)
     }
-    if (sortierung === 'guenstigste') return parsePreis(a.budget) - parsePreis(b.budget)
-    if (sortierung === 'teuerste') return parsePreis(b.budget) - parsePreis(a.budget)
-    if (sortierung === 'groesste') {
-      return (parseFloat(b.groesse || '0') || 0) - (parseFloat(a.groesse || '0') || 0)
-    }
-    return 0
-  })
 
-  const reset = () => {
-    setSuchtext('')
-    setRolleFilter('alle')
-    setImmobilienart('')
-    setPreisMin('')
-    setPreisMax('')
-    setSortierung('neueste')
+    setBilder([...bilder, ...neueUrls])
+    setUploadLaden(false)
+    e.target.value = ''
   }
 
-  const hatFilter =
-    suchtext || rolleFilter !== 'alle' || immobilienart || preisMin || preisMax
+  const removeBild = (url: string) => {
+    setBilder(bilder.filter((u) => u !== url))
+  }
+
+  const handleSubmit = async () => {
+    if (!ort || !budget || !immobilienart || !email) {
+      setFehler('Bitte Ort, Budget, Immobilienart und E-Mail ausfüllen.')
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setFehler('Bitte eine gültige E-Mail-Adresse eingeben.')
+      return
+    }
+    setLaden(true)
+    setFehler(null)
+
+    const { error } = await supabase
+      .from('inserate')
+      .insert([{
+        rolle,
+        ort,
+        budget,
+        immobilienart,
+        email,
+        telefon: telefon || null,
+        groesse: groesse || null,
+        zimmer: zimmer || null,
+        beschreibung: beschreibung || null,
+        bilder: bilder.length > 0 ? bilder : null,
+      }])
+
+    if (error) {
+      setFehler('Fehler beim Speichern. Bitte nochmal versuchen.')
+      console.error(error)
+    } else {
+      setGesendet(true)
+    }
+    setLaden(false)
+  }
+
+  const reset = () => {
+    setRolle(null)
+    setOrt('')
+    setBudget('')
+    setImmobilienart('')
+    setEmail('')
+    setTelefon('')
+    setGroesse('')
+    setZimmer('')
+    setBeschreibung('')
+    setBilder([])
+    setGesendet(false)
+    setFehler(null)
+  }
 
   return (
     <div style={styles.page}>
-      <div style={styles.container}>
-        {/* Header */}
-        <header style={styles.header}>
-          <Link href="/" style={styles.logo}>🏠 Immo-Plattform</Link>
-          <Link href="/" style={styles.newBtn}>+ Neues Inserat</Link>
-        </header>
-
-        <h1 style={styles.titel}>Alle Inserate</h1>
-
-        {/* Filter-Karte */}
-        <div style={styles.filterCard}>
-          {/* Suchfeld + Sortierung */}
-          <div style={styles.topRow}>
-            <input
-              style={styles.suche}
-              placeholder="🔍 Suchen nach Ort, Beschreibung..."
-              value={suchtext}
-              onChange={(e) => setSuchtext(e.target.value)}
-            />
-            <select
-              style={styles.sortierung}
-              value={sortierung}
-              onChange={(e) => setSortierung(e.target.value as Sortierung)}
-            >
-              <option value="neueste">Neueste zuerst</option>
-              <option value="guenstigste">Günstigste zuerst</option>
-              <option value="teuerste">Teuerste zuerst</option>
-              <option value="groesste">Größte zuerst</option>
-            </select>
-          </div>
-
-          {/* Rolle-Toggle */}
-          <div style={styles.toggleReihe}>
-            <button
-              style={rolleFilter === 'alle' ? styles.toggleAktiv : styles.toggle}
-              onClick={() => setRolleFilter('alle')}
-            >
-              Alle
-            </button>
-            <button
-              style={rolleFilter === 'suche' ? styles.toggleAktiv : styles.toggle}
-              onClick={() => setRolleFilter('suche')}
-            >
-              🔍 Gesuche
-            </button>
-            <button
-              style={rolleFilter === 'biete' ? styles.toggleAktiv : styles.toggle}
-              onClick={() => setRolleFilter('biete')}
-            >
-              🏢 Angebote
-            </button>
-          </div>
-
-          {/* Detail-Filter */}
-          <div style={styles.filterReihe}>
-            <select
-              style={styles.filterInput}
-              value={immobilienart}
-              onChange={(e) => setImmobilienart(e.target.value)}
-            >
-              <option value="">Alle Arten</option>
-              {IMMOBILIENARTEN.map((a) => (
-                <option key={a} value={a}>{a}</option>
-              ))}
-            </select>
-            <input
-              style={styles.filterInput}
-              placeholder="Preis min (€)"
-              value={preisMin}
-              onChange={(e) => setPreisMin(e.target.value.replace(/[^\d]/g, ''))}
-            />
-            <input
-              style={styles.filterInput}
-              placeholder="Preis max (€)"
-              value={preisMax}
-              onChange={(e) => setPreisMax(e.target.value.replace(/[^\d]/g, ''))}
-            />
-            {hatFilter && (
-              <button style={styles.resetBtn} onClick={reset}>
-                ✕ Zurücksetzen
-              </button>
-            )}
-          </div>
+      <div style={styles.card}>
+        <div style={styles.topNav}>
+          <h1 style={styles.titel}>🏠 Immo-Plattform</h1>
+          <Link href="/inserate" style={styles.navLink}>
+            Alle Inserate →
+          </Link>
         </div>
+        <p style={styles.sub}>Investoren & Anbieter verbinden</p>
 
-        {/* Counter */}
-        <p style={styles.counter}>
-          {laden
-            ? 'Lädt...'
-            : sortiert.length === 0
-            ? 'Keine Inserate gefunden'
-            : `${sortiert.length} ${sortiert.length === 1 ? 'Inserat' : 'Inserate'} gefunden`}
-        </p>
-
-        {/* Leer-Zustand */}
-        {!laden && sortiert.length === 0 && (
-          <div style={styles.leerZustand}>
-            <p style={styles.leerEmoji}>🤷</p>
-            <p style={styles.leerText}>
-              Keine Inserate passen zu deinen Filtern.
-            </p>
-            {hatFilter && (
-              <button style={styles.leerBtn} onClick={reset}>
-                Filter zurücksetzen
-              </button>
-            )}
+        {gesendet && (
+          <div style={styles.erfolg}>
+            <p style={{ fontSize: 40, margin: 0 }}>✅</p>
+            <p style={{ fontWeight: 'bold', fontSize: 18, color: '#1a1a1a' }}>Erfolgreich veröffentlicht!</p>
+            <p style={{ color: '#555' }}>Dein Eintrag ist jetzt im Marktplatz sichtbar.</p>
+            <Link href="/inserate" style={styles.btnPrimary}>
+              Alle Inserate ansehen →
+            </Link>
+            <button style={styles.btnSecondary} onClick={reset}>
+              Weiteres Inserat aufgeben
+            </button>
           </div>
         )}
 
-        {/* Karten-Grid */}
-        {sortiert.length > 0 && (
-          <div style={styles.grid}>
-            {sortiert.map((i) => (
-              <Link
-                key={i.id}
-                href={`/inserate/${i.id}`}
-                style={styles.kartenLink}
+        {!rolle && !gesendet && (
+          <div>
+            <p style={styles.frage}>Was möchtest du tun?</p>
+            <div style={styles.btnReihe}>
+              <button style={styles.btnSuche} onClick={() => setRolle('suche')}>
+                🔍 Ich suche eine Immobilie
+              </button>
+              <button style={styles.btnBiete} onClick={() => setRolle('biete')}>
+                🏢 Ich biete eine Immobilie
+              </button>
+            </div>
+          </div>
+        )}
+
+        {rolle && !gesendet && (
+          <div>
+            <p style={styles.rolleLabel}>
+              {rolle === 'suche' ? '🔍 Ich suche eine Immobilie' : '🏢 Ich biete eine Immobilie'}
+              <button onClick={reset} style={styles.aendern}>ändern</button>
+            </p>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Ort *</label>
+              <input
+                style={styles.input}
+                placeholder="z. B. Berlin, München, Hamburg..."
+                value={ort}
+                onChange={(e) => setOrt(e.target.value)}
+              />
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>
+                {rolle === 'suche' ? 'Budget (€) *' : 'Preis (€) *'}
+              </label>
+              <input
+                style={styles.input}
+                placeholder={rolle === 'suche' ? 'z. B. 300.000' : 'z. B. 450.000'}
+                value={budget}
+                onChange={(e) => setBudget(e.target.value)}
+              />
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Immobilienart *</label>
+              <select
+                style={styles.input}
+                value={immobilienart}
+                onChange={(e) => setImmobilienart(e.target.value)}
               >
-                <div style={styles.karte}>
-                  {/* Bild */}
-                  {i.bilder && i.bilder.length > 0 ? (
-                    <div style={styles.bildWrapper}>
-                      <img src={i.bilder[0]} alt="" style={styles.bild} />
-                      {i.bilder.length > 1 && (
-                        <span style={styles.bildBadge}>+{i.bilder.length - 1}</span>
-                      )}
-                    </div>
-                  ) : (
-                    <div style={styles.bildPlatzhalter}>🏠</div>
-                  )}
+                <option value="">Bitte wählen...</option>
+                <option>Eigentumswohnung</option>
+                <option>Mehrfamilienhaus</option>
+                <option>Einfamilienhaus</option>
+                <option>Gewerbeimmobilie</option>
+                <option>Grundstück</option>
+                <option>Pflegeimmobilie</option>
+                <option>Ferienimmobilie</option>
+              </select>
+            </div>
 
-                  {/* Info */}
-                  <div style={styles.info}>
-                    <span
-                      style={i.rolle === 'suche' ? styles.badgeSuche : styles.badgeBiete}
-                    >
-                      {i.rolle === 'suche' ? '🔍 Gesucht' : '🏢 Geboten'}
-                    </span>
+            <div style={styles.zweierReihe}>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Größe (m²)</label>
+                <input
+                  style={styles.input}
+                  placeholder="z. B. 85"
+                  value={groesse}
+                  onChange={(e) => setGroesse(e.target.value)}
+                />
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Zimmer</label>
+                <input
+                  style={styles.input}
+                  placeholder="z. B. 3"
+                  value={zimmer}
+                  onChange={(e) => setZimmer(e.target.value)}
+                />
+              </div>
+            </div>
 
-                    <h3 style={styles.kartenTitel}>{i.immobilienart}</h3>
-                    <p style={styles.kartenOrt}>📍 {i.ort}</p>
-                    <p style={styles.kartenPreis}>{formatPreis(i.budget)}</p>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>
+                {rolle === 'suche' ? 'Deine Wünsche' : 'Beschreibung'}
+              </label>
+              <textarea
+                style={styles.textarea}
+                placeholder={
+                  rolle === 'suche'
+                    ? 'z. B. Balkon, Altbau, Nähe S-Bahn...'
+                    : 'z. B. Renoviert 2022, Süd-Balkon, Tiefgarage...'
+                }
+                value={beschreibung}
+                onChange={(e) => setBeschreibung(e.target.value)}
+                rows={3}
+              />
+            </div>
 
-                    {(i.groesse || i.zimmer) && (
-                      <p style={styles.kartenMeta}>
-                        {i.groesse && `${i.groesse} m²`}
-                        {i.groesse && i.zimmer && ' · '}
-                        {i.zimmer && `${i.zimmer} Zi.`}
-                      </p>
-                    )}
-
-                    <p style={styles.mehr}>Mehr anzeigen →</p>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Bilder (max. {MAX_BILDER})</label>
+              <div style={styles.uploadArea}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleUpload}
+                  disabled={uploadLaden || bilder.length >= MAX_BILDER}
+                  style={styles.fileInput}
+                  id="fileUpload"
+                />
+                <label htmlFor="fileUpload" style={styles.uploadBtn}>
+                  {uploadLaden ? 'Wird hochgeladen...' : '📷 Bilder auswählen'}
+                </label>
+                {bilder.length > 0 && (
+                  <div style={styles.bilderVorschau}>
+                    {bilder.map((url) => (
+                      <div key={url} style={styles.bildWrapper}>
+                        <img src={url} style={styles.thumbnail} alt="" />
+                        <button
+                          type="button"
+                          style={styles.removeBtn}
+                          onClick={() => removeBild(url)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              </Link>
-            ))}
+                )}
+              </div>
+            </div>
+
+            <p style={styles.sektion}>Deine Kontaktdaten</p>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>E-Mail *</label>
+              <input
+                style={styles.input}
+                type="email"
+                placeholder="du@beispiel.de"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Telefon</label>
+              <input
+                style={styles.input}
+                type="tel"
+                placeholder="optional"
+                value={telefon}
+                onChange={(e) => setTelefon(e.target.value)}
+              />
+            </div>
+
+            {fehler && <p style={styles.fehler}>{fehler}</p>}
+
+            <button
+              style={laden || uploadLaden ? styles.btnSendenLaden : styles.btnSenden}
+              onClick={handleSubmit}
+              disabled={laden || uploadLaden}
+            >
+              {laden ? 'Wird gespeichert...' : rolle === 'suche' ? 'Suche absenden' : 'Inserat veröffentlichen'}
+            </button>
           </div>
         )}
       </div>
@@ -283,268 +327,254 @@ const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: '100vh',
     background: '#f0f2f5',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     fontFamily: 'system-ui, sans-serif',
     padding: '20px',
   },
-  container: {
-    maxWidth: 1200,
-    margin: '0 auto',
+  card: {
+    background: '#fff',
+    borderRadius: 16,
+    padding: '40px 36px',
+    maxWidth: 480,
+    width: '100%',
+    boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
   },
-  header: {
+  topNav: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '20px 0',
-  },
-  logo: {
-    fontSize: 20,
-    fontWeight: 700,
-    textDecoration: 'none',
-    color: '#1a1a1a',
-  },
-  newBtn: {
-    padding: '10px 18px',
-    background: '#1a1a1a',
-    color: '#fff',
-    borderRadius: 10,
-    textDecoration: 'none',
-    fontSize: 14,
-    fontWeight: 600,
+    marginBottom: 6,
   },
   titel: {
-    fontSize: 28,
+    margin: 0,
+    fontSize: 24,
     fontWeight: 700,
-    marginBottom: 20,
     color: '#1a1a1a',
   },
-  filterCard: {
-    background: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
+  navLink: {
+    fontSize: 13,
+    color: '#666',
+    textDecoration: 'none',
+    fontWeight: 600,
   },
-  topRow: {
+  sub: {
+    color: '#888',
+    marginTop: 0,
+    marginBottom: 32,
+  },
+  frage: {
+    fontWeight: 600,
+    fontSize: 17,
+    marginBottom: 16,
+    color: '#1a1a1a',
+  },
+  btnReihe: {
     display: 'flex',
-    gap: 10,
-    marginBottom: 14,
-    flexWrap: 'wrap' as const,
+    flexDirection: 'column',
+    gap: 12,
   },
-  suche: {
-    flex: '1 1 300px',
+  btnSuche: {
+    padding: '16px 20px',
+    borderRadius: 12,
+    border: '2px solid #10b981',
+    background: '#f0fdf8',
+    color: '#065f46',
+    fontSize: 16,
+    fontWeight: 600,
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+  btnBiete: {
+    padding: '16px 20px',
+    borderRadius: 12,
+    border: '2px solid #f59e0b',
+    background: '#fffbeb',
+    color: '#78350f',
+    fontSize: 16,
+    fontWeight: 600,
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+  rolleLabel: {
+    fontWeight: 600,
+    fontSize: 15,
+    marginBottom: 24,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    color: '#1a1a1a',
+  },
+  aendern: {
+    background: 'none',
+    border: 'none',
+    color: '#888',
+    cursor: 'pointer',
+    fontSize: 13,
+    textDecoration: 'underline',
+  },
+  formGroup: {
+    marginBottom: 18,
+    flex: 1,
+  },
+  zweierReihe: {
+    display: 'flex',
+    gap: 12,
+  },
+  label: {
+    display: 'block',
+    fontSize: 13,
+    fontWeight: 600,
+    color: '#444',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  },
+  sektion: {
+    fontSize: 14,
+    fontWeight: 700,
+    color: '#1a1a1a',
+    marginTop: 24,
+    marginBottom: 12,
+    paddingTop: 16,
+    borderTop: '1px solid #e2e8f0',
+  },
+  input: {
+    width: '100%',
     padding: '12px 14px',
     borderRadius: 10,
     border: '1.5px solid #e2e8f0',
     fontSize: 15,
     outline: 'none',
-    color: '#1a1a1a',
+    boxSizing: 'border-box',
     background: '#fafafa',
+    color: '#1a1a1a',
   },
-  sortierung: {
+  textarea: {
+    width: '100%',
     padding: '12px 14px',
     borderRadius: 10,
     border: '1.5px solid #e2e8f0',
-    fontSize: 14,
+    fontSize: 15,
     outline: 'none',
-    color: '#1a1a1a',
-    background: '#fff',
-    cursor: 'pointer',
-  },
-  toggleReihe: {
-    display: 'flex',
-    gap: 8,
-    marginBottom: 14,
-    flexWrap: 'wrap' as const,
-  },
-  toggle: {
-    padding: '8px 14px',
-    borderRadius: 8,
-    border: '1.5px solid #e2e8f0',
-    background: '#fff',
-    color: '#555',
-    fontSize: 14,
-    fontWeight: 500,
-    cursor: 'pointer',
-  },
-  toggleAktiv: {
-    padding: '8px 14px',
-    borderRadius: 8,
-    border: '1.5px solid #1a1a1a',
-    background: '#1a1a1a',
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: 'pointer',
-  },
-  filterReihe: {
-    display: 'flex',
-    gap: 10,
-    flexWrap: 'wrap' as const,
-    alignItems: 'center',
-  },
-  filterInput: {
-    flex: '1 1 150px',
-    padding: '10px 12px',
-    borderRadius: 10,
-    border: '1.5px solid #e2e8f0',
-    fontSize: 14,
-    outline: 'none',
-    color: '#1a1a1a',
+    boxSizing: 'border-box',
     background: '#fafafa',
+    color: '#1a1a1a',
+    fontFamily: 'system-ui, sans-serif',
+    resize: 'vertical',
   },
-  resetBtn: {
-    padding: '10px 14px',
-    borderRadius: 10,
-    border: '1.5px solid #fecaca',
-    background: '#fef2f2',
-    color: '#b91c1c',
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: 'pointer',
-  },
-  counter: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
-  },
-  leerZustand: {
-    background: '#fff',
-    borderRadius: 16,
-    padding: '60px 20px',
-    textAlign: 'center' as const,
-    boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
-  },
-  leerEmoji: {
-    fontSize: 56,
-    margin: 0,
-  },
-  leerText: {
-    fontSize: 16,
-    color: '#555',
-    marginTop: 12,
-    marginBottom: 20,
-  },
-  leerBtn: {
-    padding: '12px 24px',
-    borderRadius: 10,
-    border: 'none',
-    background: '#1a1a1a',
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: 'pointer',
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-    gap: 20,
-  },
-  kartenLink: {
-    textDecoration: 'none',
-    color: 'inherit',
-  },
-  karte: {
-    background: '#fff',
-    borderRadius: 14,
-    overflow: 'hidden',
-    boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
-    transition: 'transform 0.15s, box-shadow 0.15s',
-    cursor: 'pointer',
-    height: '100%',
+  uploadArea: {
     display: 'flex',
     flexDirection: 'column',
+    gap: 12,
+  },
+  fileInput: {
+    display: 'none',
+  },
+  uploadBtn: {
+    padding: '12px 16px',
+    borderRadius: 10,
+    border: '1.5px dashed #cbd5e1',
+    background: '#fafafa',
+    color: '#1a1a1a',
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: 'pointer',
+    textAlign: 'center',
+  },
+  bilderVorschau: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   bildWrapper: {
     position: 'relative',
-    width: '100%',
-    height: 180,
-    background: '#f0f2f5',
-    overflow: 'hidden',
+    width: 80,
+    height: 80,
   },
-  bild: {
+  thumbnail: {
     width: '100%',
     height: '100%',
     objectFit: 'cover',
+    borderRadius: 8,
+    border: '1px solid #e2e8f0',
   },
-  bildBadge: {
+  removeBtn: {
     position: 'absolute',
-    bottom: 10,
-    right: 10,
-    background: 'rgba(0,0,0,0.7)',
+    top: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    borderRadius: '50%',
+    border: 'none',
+    background: '#e53e3e',
     color: '#fff',
-    padding: '4px 10px',
-    borderRadius: 20,
-    fontSize: 12,
-    fontWeight: 600,
-  },
-  bildPlatzhalter: {
-    width: '100%',
-    height: 180,
-    background: '#f0f2f5',
+    fontSize: 16,
+    fontWeight: 700,
+    cursor: 'pointer',
+    lineHeight: 1,
+    padding: 0,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 48,
   },
-  info: {
-    padding: 16,
-    display: 'flex',
-    flexDirection: 'column',
-    flex: 1,
-  },
-  badgeSuche: {
-    display: 'inline-block',
-    fontSize: 12,
-    fontWeight: 600,
-    padding: '4px 10px',
-    borderRadius: 20,
-    background: '#f0fdf8',
-    color: '#065f46',
-    marginBottom: 10,
-    alignSelf: 'flex-start',
-  },
-  badgeBiete: {
-    display: 'inline-block',
-    fontSize: 12,
-    fontWeight: 600,
-    padding: '4px 10px',
-    borderRadius: 20,
-    background: '#fffbeb',
-    color: '#78350f',
-    marginBottom: 10,
-    alignSelf: 'flex-start',
-  },
-  kartenTitel: {
-    fontSize: 17,
-    fontWeight: 700,
-    margin: 0,
-    marginBottom: 4,
-    color: '#1a1a1a',
-  },
-  kartenOrt: {
+  fehler: {
+    color: '#e53e3e',
     fontSize: 14,
-    color: '#555',
-    margin: 0,
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  kartenPreis: {
-    fontSize: 18,
-    fontWeight: 700,
-    color: '#1a1a1a',
-    margin: 0,
-    marginBottom: 4,
-  },
-  kartenMeta: {
-    fontSize: 13,
-    color: '#888',
-    margin: 0,
-    marginBottom: 10,
-  },
-  mehr: {
-    fontSize: 13,
-    color: '#1a1a1a',
+  btnSenden: {
+    width: '100%',
+    padding: '14px',
+    borderRadius: 12,
+    border: 'none',
+    background: '#1a1a1a',
+    color: '#fff',
+    fontSize: 16,
     fontWeight: 600,
-    margin: 0,
-    marginTop: 'auto',
+    cursor: 'pointer',
+    marginTop: 8,
+  },
+  btnSendenLaden: {
+    width: '100%',
+    padding: '14px',
+    borderRadius: 12,
+    border: 'none',
+    background: '#999',
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 600,
+    cursor: 'not-allowed',
+    marginTop: 8,
+  },
+  erfolg: {
+    textAlign: 'center',
+    padding: '20px 0',
+  },
+  btnPrimary: {
+    display: 'inline-block',
+    marginTop: 16,
+    padding: '12px 24px',
+    borderRadius: 10,
+    background: '#1a1a1a',
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: 600,
+    textDecoration: 'none',
+  },
+  btnSecondary: {
+    display: 'block',
+    marginTop: 12,
+    padding: '10px 20px',
+    borderRadius: 10,
+    border: '1.5px solid #e2e8f0',
+    background: '#fff',
+    color: '#1a1a1a',
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: 'pointer',
+    marginLeft: 'auto',
+    marginRight: 'auto',
   },
 }
