@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import Link from 'next/link'
-import supabase from '../lib/supabaseClient'
+import supabase from '../../lib/supabaseClient'
 
 type Inserat = {
   id: number
@@ -91,48 +91,38 @@ export default function Inserate() {
 
         <div style={styles.grid}>
           {gefiltert.map((i) => (
-            <div key={i.id} style={styles.card}>
-              {i.bilder && i.bilder.length > 0 ? (
-                <div style={styles.imageWrapper}>
-                  <img src={i.bilder[0]} style={styles.cardImage} alt={i.immobilienart} />
-                  {i.bilder.length > 1 && (
-                    <span style={styles.imageCount}>+{i.bilder.length - 1}</span>
-                  )}
-                </div>
-              ) : (
-                <div style={styles.placeholderImage}>🏠</div>
-              )}
-              <div style={styles.cardContent}>
-                <div style={i.rolle === 'suche' ? styles.badgeSuche : styles.badgeBiete}>
-                  {i.rolle === 'suche' ? '🔍 Sucht' : '🏢 Bietet'}
-                </div>
-                <h3 style={styles.cardTitel}>{i.immobilienart}</h3>
-                <p style={styles.cardOrt}>📍 {i.ort}</p>
-                <p style={styles.cardBudget}>
-                  {i.rolle === 'suche' ? 'Budget' : 'Preis'}: {i.budget} €
-                </p>
-                {(i.groesse || i.zimmer) && (
-                  <p style={styles.cardMeta}>
-                    {i.groesse && `${i.groesse} m²`}
-                    {i.groesse && i.zimmer && ' · '}
-                    {i.zimmer && `${i.zimmer} Zimmer`}
+            <Link key={i.id} href={`/inserate/${i.id}`} style={styles.cardLink}>
+              <div style={styles.card}>
+                {i.bilder && i.bilder.length > 0 ? (
+                  <div style={styles.imageWrapper}>
+                    <img src={i.bilder[0]} style={styles.cardImage} alt={i.immobilienart} />
+                    {i.bilder.length > 1 && (
+                      <span style={styles.imageCount}>+{i.bilder.length - 1}</span>
+                    )}
+                  </div>
+                ) : (
+                  <div style={styles.placeholderImage}>🏠</div>
+                )}
+                <div style={styles.cardContent}>
+                  <div style={i.rolle === 'suche' ? styles.badgeSuche : styles.badgeBiete}>
+                    {i.rolle === 'suche' ? '🔍 Sucht' : '🏢 Bietet'}
+                  </div>
+                  <h3 style={styles.cardTitel}>{i.immobilienart}</h3>
+                  <p style={styles.cardOrt}>📍 {i.ort}</p>
+                  <p style={styles.cardBudget}>
+                    {i.rolle === 'suche' ? 'Budget' : 'Preis'}: {i.budget} €
                   </p>
-                )}
-                {i.beschreibung && (
-                  <p style={styles.cardBeschreibung}>{i.beschreibung}</p>
-                )}
-                <div style={styles.cardKontakt}>
-                  <a href={`mailto:${i.email}`} style={styles.kontaktLink}>
-                    📧 Kontaktieren
-                  </a>
-                  {i.telefon && (
-                    <a href={`tel:${i.telefon}`} style={styles.kontaktLink}>
-                      📞 {i.telefon}
-                    </a>
+                  {(i.groesse || i.zimmer) && (
+                    <p style={styles.cardMeta}>
+                      {i.groesse && `${i.groesse} m²`}
+                      {i.groesse && i.zimmer && ' · '}
+                      {i.zimmer && `${i.zimmer} Zimmer`}
+                    </p>
                   )}
+                  <p style={styles.mehr}>Mehr anzeigen →</p>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>
@@ -221,6 +211,10 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
     gap: 16,
   },
+  cardLink: {
+    textDecoration: 'none',
+    color: 'inherit',
+  },
   card: {
     background: '#fff',
     borderRadius: 14,
@@ -228,6 +222,9 @@ const styles: Record<string, CSSProperties> = {
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
+    cursor: 'pointer',
+    transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+    height: '100%',
   },
   imageWrapper: {
     position: 'relative',
@@ -308,24 +305,10 @@ const styles: Record<string, CSSProperties> = {
     color: '#666',
     margin: 0,
   },
-  cardBeschreibung: {
-    fontSize: 14,
-    color: '#333',
-    margin: '8px 0',
-    lineHeight: 1.4,
-  },
-  cardKontakt: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-    marginTop: 12,
-    paddingTop: 12,
-    borderTop: '1px solid #e2e8f0',
-  },
-  kontaktLink: {
-    fontSize: 14,
+  mehr: {
+    fontSize: 13,
     color: '#1a1a1a',
-    textDecoration: 'none',
     fontWeight: 600,
+    marginTop: 10,
   },
 }
