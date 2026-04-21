@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
+import Link from 'next/link'
 import supabase from '../lib/supabaseClient'
 
 type Rolle = 'suche' | 'biete' | null
@@ -70,20 +71,26 @@ export default function Home() {
   return (
     <div style={styles.page}>
       <div style={styles.card}>
-        <h1 style={styles.titel}>🏠 Immo-Plattform</h1>
+        <div style={styles.topNav}>
+          <h1 style={styles.titel}>🏠 Immo-Plattform</h1>
+          <Link href="/inserate" style={styles.navLink}>
+            Alle Inserate →
+          </Link>
+        </div>
         <p style={styles.sub}>Investoren & Anbieter verbinden</p>
 
         {gesendet && (
           <div style={styles.erfolg}>
             <p style={{ fontSize: 40, margin: 0 }}>✅</p>
-            <p style={{ fontWeight: 'bold', fontSize: 18, color: '#1a1a1a' }}>Erfolgreich gespeichert!</p>
+            <p style={{ fontWeight: 'bold', fontSize: 18, color: '#1a1a1a' }}>Erfolgreich veröffentlicht!</p>
             <p style={{ color: '#555' }}>
-              {rolle === 'suche'
-                ? 'Wir melden uns wenn passende Objekte verfügbar sind.'
-                : 'Dein Inserat ist online. Investoren können dich finden.'}
+              Dein Eintrag ist jetzt im Marktplatz sichtbar.
             </p>
-            <button style={styles.btnReset} onClick={reset}>
-              Neues Inserat
+            <Link href="/inserate" style={styles.btnPrimary}>
+              Alle Inserate ansehen →
+            </Link>
+            <button style={styles.btnSecondary} onClick={reset}>
+              Weiteres Inserat aufgeben
             </button>
           </div>
         )}
@@ -245,15 +252,27 @@ const styles: Record<string, CSSProperties> = {
     width: '100%',
     boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
   },
+  topNav: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   titel: {
     margin: 0,
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 700,
     color: '#1a1a1a',
   },
+  navLink: {
+    fontSize: 13,
+    color: '#666',
+    textDecoration: 'none',
+    fontWeight: 600,
+  },
   sub: {
     color: '#888',
-    marginTop: 6,
+    marginTop: 0,
     marginBottom: 32,
   },
   frage: {
@@ -389,15 +408,29 @@ const styles: Record<string, CSSProperties> = {
     textAlign: 'center',
     padding: '20px 0',
   },
-  btnReset: {
+  btnPrimary: {
+    display: 'inline-block',
     marginTop: 16,
     padding: '12px 24px',
     borderRadius: 10,
-    border: 'none',
     background: '#1a1a1a',
     color: '#fff',
     fontSize: 15,
     fontWeight: 600,
+    textDecoration: 'none',
+  },
+  btnSecondary: {
+    display: 'block',
+    marginTop: 12,
+    padding: '10px 20px',
+    borderRadius: 10,
+    border: '1.5px solid #e2e8f0',
+    background: '#fff',
+    color: '#1a1a1a',
+    fontSize: 14,
+    fontWeight: 600,
     cursor: 'pointer',
+    marginLeft: 'auto',
+    marginRight: 'auto',
   },
 }
