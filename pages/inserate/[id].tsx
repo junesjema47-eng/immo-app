@@ -111,6 +111,9 @@ export default function InseratDetail() {
   }
 
   const hatBilder = inserat.bilder && inserat.bilder.length > 0
+  const mailtoHref = inserat.email
+    ? `mailto:${inserat.email}?subject=${encodeURIComponent('Interesse an deinem Inserat')}&body=${encodeURIComponent('Hallo,\n\nich habe dein Inserat auf der Immo-Plattform gesehen und hätte Interesse.')}`
+    : '#'
 
   return (
     <div style={styles.page}>
@@ -121,16 +124,11 @@ export default function InseratDetail() {
         </header>
 
         <div style={styles.layout}>
-          {/* Bildergalerie */}
           <div style={styles.gallerySection}>
             {hatBilder ? (
               <>
                 <div style={styles.mainImageWrapper}>
-                  <img
-                    src={inserat.bilder![aktuellesBild]}
-                    style={styles.mainImage}
-                    alt=""
-                  />
+                  <img src={inserat.bilder![aktuellesBild]} style={styles.mainImage} alt="" />
                 </div>
                 {inserat.bilder!.length > 1 && (
                   <div style={styles.thumbnails}>
@@ -153,12 +151,9 @@ export default function InseratDetail() {
             )}
           </div>
 
-          {/* Info Sidebar */}
           <div style={styles.infoSection}>
             <div style={styles.infoCard}>
-              <span
-                style={inserat.rolle === 'suche' ? styles.badgeSuche : styles.badgeBiete}
-              >
+              <span style={inserat.rolle === 'suche' ? styles.badgeSuche : styles.badgeBiete}>
                 {inserat.rolle === 'suche' ? '🔍 Gesucht' : '🏢 Geboten'}
               </span>
               <h1 style={styles.titel}>{inserat.immobilienart}</h1>
@@ -194,7 +189,6 @@ export default function InseratDetail() {
                 </>
               )}
 
-              {/* Teilen-Bereich */}
               <div style={styles.teilenCard}>
                 <h4 style={styles.h4}>Teilen</h4>
                 <div style={styles.teilenButtons}>
@@ -207,15 +201,11 @@ export default function InseratDetail() {
                 </div>
               </div>
 
-              {/* Kontakt */}
               {(inserat.email || inserat.telefon) && (
                 <div style={styles.kontaktCard}>
                   <h4 style={styles.h4}>Kontakt aufnehmen</h4>
                   {inserat.email && (
-                    
-                      href={`mailto:${inserat.email}?subject=Interesse%20an%20deinem%20Inserat&body=Hallo%2C%0A%0Aich%20habe%20dein%20Inserat%20auf%20der%20Immo-Plattform%20gesehen%20und%20h%C3%A4tte%20Interesse.`}
-                      style={styles.emailBtn}
-                    >
+                    <a href={mailtoHref} style={styles.emailBtn}>
                       📧 E-Mail senden
                     </a>
                   )}
@@ -249,8 +239,8 @@ const styles: Record<string, CSSProperties> = {
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0', marginBottom: 20 },
   logo: { fontSize: 20, fontWeight: 700, textDecoration: 'none', color: '#1a1a1a' },
   backBtn: { fontSize: 14, textDecoration: 'none', color: '#555' },
-  info: { fontSize: 16, color: '#888', textAlign: 'center' as const, padding: 60 },
-  errorCard: { background: '#fff', borderRadius: 16, padding: '60px 20px', textAlign: 'center' as const, boxShadow: '0 4px 24px rgba(0,0,0,0.06)' },
+  info: { fontSize: 16, color: '#888', textAlign: 'center', padding: 60 },
+  errorCard: { background: '#fff', borderRadius: 16, padding: '60px 20px', textAlign: 'center', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' },
   errorEmoji: { fontSize: 56, margin: 0 },
   errorText: { fontSize: 16, color: '#555', marginTop: 12, marginBottom: 20 },
   errorBtn: { padding: '12px 24px', borderRadius: 10, background: '#1a1a1a', color: '#fff', textDecoration: 'none', fontSize: 14, fontWeight: 600, display: 'inline-block' },
@@ -258,7 +248,7 @@ const styles: Record<string, CSSProperties> = {
   gallerySection: { minWidth: 0 },
   mainImageWrapper: { width: '100%', aspectRatio: '4/3', borderRadius: 16, overflow: 'hidden', background: '#fff', boxShadow: '0 4px 24px rgba(0,0,0,0.08)' },
   mainImage: { width: '100%', height: '100%', objectFit: 'cover' },
-  thumbnails: { display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' as const },
+  thumbnails: { display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' },
   thumb: { width: 80, height: 80, borderRadius: 10, overflow: 'hidden', border: '2px solid transparent', cursor: 'pointer', padding: 0, background: 'none' },
   thumbAktiv: { width: 80, height: 80, borderRadius: 10, overflow: 'hidden', border: '2px solid #1a1a1a', cursor: 'pointer', padding: 0, background: 'none' },
   thumbImg: { width: '100%', height: '100%', objectFit: 'cover' },
@@ -273,14 +263,17 @@ const styles: Record<string, CSSProperties> = {
   preisLabel: { fontSize: 14, color: '#888', fontWeight: 400 },
   metaGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 },
   metaBox: { background: '#fafafa', borderRadius: 10, padding: 12 },
-  metaLabel: { fontSize: 11, color: '#888', margin: 0, textTransform: 'uppercase' as const, letterSpacing: '0.05em', fontWeight: 600 },
+  metaLabel: { fontSize: 11, color: '#888', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 },
   metaValue: { fontSize: 18, color: '#1a1a1a', fontWeight: 700, margin: 0, marginTop: 4 },
   h3: { fontSize: 16, fontWeight: 700, margin: 0, marginTop: 4, marginBottom: 8, color: '#1a1a1a' },
-  beschreibung: { fontSize: 14, color: '#444', lineHeight: 1.6, margin: 0, marginBottom: 20, whiteSpace: 'pre-wrap' as const },
+  beschreibung: { fontSize: 14, color: '#444', lineHeight: 1.6, margin: 0, marginBottom: 20, whiteSpace: 'pre-wrap' },
   teilenCard: { background: '#f8fafc', borderRadius: 12, padding: 16, marginBottom: 16 },
   h4: { fontSize: 14, fontWeight: 700, margin: 0, marginBottom: 10, color: '#1a1a1a' },
-  teilenButtons: { display: 'flex', gap: 8, flexWrap: 'wrap' as const },
+  teilenButtons: { display: 'flex', gap: 8, flexWrap: 'wrap' },
   whatsappBtn: { flex: 1, padding: '10px 14px', borderRadius: 10, border: 'none', background: '#25D366', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', minWidth: 120 },
   copyBtn: { flex: 1, padding: '10px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', color: '#1a1a1a', fontSize: 14, fontWeight: 600, cursor: 'pointer', minWidth: 120 },
   kontaktCard: { background: '#fafafa', borderRadius: 12, padding: 16 },
-  emailBtn: { display
+  emailBtn: { display: 'block', padding: '12px 14px', borderRadius: 10, background: '#1a1a1a', color: '#fff', textDecoration: 'none', fontSize: 14, fontWeight: 600, textAlign: 'center', marginBottom: 8 },
+  telBtn: { display: 'block', padding: '12px 14px', borderRadius: 10, background: '#fff', border: '1.5px solid #1a1a1a', color: '#1a1a1a', textDecoration: 'none', fontSize: 14, fontWeight: 600, textAlign: 'center' },
+  datum: { fontSize: 12, color: '#888', textAlign: 'center', marginTop: 20, marginBottom: 0 },
+}
