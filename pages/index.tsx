@@ -1,9 +1,12 @@
 import { useState } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ChangeEvent } from 'react'
 import Link from 'next/link'
 import supabase from '../lib/supabaseClient'
 
 type Rolle = 'suche' | 'biete' | null
+
+const MAX_BILDER = 5
+const MAX_GROESSE_MB = 10
 
 export default function Home() {
   const [rolle, setRolle] = useState<Rolle>(null)
@@ -15,9 +18,61 @@ export default function Home() {
   const [groesse, setGroesse] = useState('')
   const [zimmer, setZimmer] = useState('')
   const [beschreibung, setBeschreibung] = useState('')
+  const [bilder, setBilder] = useState<string[]>([])
+  const [uploadLaden, setUploadLaden] = useState(false)
   const [gesendet, setGesendet] = useState(false)
   const [laden, setLaden] = useState(false)
   const [fehler, setFehler] = useState<string | null>(null)
+
+  const handleUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    if (bilder.length + files.length > MAX_BILDER) {
+      setFehler(`Maximal ${MAX_BILDER} Bilder pro Inserat.`)
+      return
+    }
+
+    setUploadLaden(true)
+    setFehler(null)
+    const neueUrls: string[] = []
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+
+      if (file.size > MAX_GROESSE_MB * 1024 * 1024) {
+        setFehler(`"${file.name}" ist zu groß (max. ${MAX_GROESSE_MB} MB).`)
+        continue
+      }
+
+      const ext = file.name.split('.').pop()
+      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('inserat-bilder')
+        .upload(fileName, file)
+
+      if (uploadError) {
+        console.error(uploadError)
+        setFehler('Upload fehlgeschlagen: ' + uploadError.message)
+        continue
+      }
+
+      const { data } = supabase.storage
+        .from('inserat-bilder')
+        .getPublicUrl(fileName)
+
+      neueUrls.push(data.publicUrl)
+    }
+
+    setBilder([...bilder, ...neueUrls])
+    setUploadLaden(false)
+    e.target.value = ''
+  }
+
+  const removeBild = (url: string) => {
+    setBilder(bilder.filter((u) => u !== url))
+  }
 
   const handleSubmit = async () => {
     if (!ort || !budget || !immobilienart || !email) {
@@ -43,6 +98,7 @@ export default function Home() {
         groesse: groesse || null,
         zimmer: zimmer || null,
         beschreibung: beschreibung || null,
+        bilder: bilder.length > 0 ? bilder : null,
       }])
 
     if (error) {
@@ -64,6 +120,7 @@ export default function Home() {
     setGroesse('')
     setZimmer('')
     setBeschreibung('')
+    setBilder([])
     setGesendet(false)
     setFehler(null)
   }
@@ -83,9 +140,7 @@ export default function Home() {
           <div style={styles.erfolg}>
             <p style={{ fontSize: 40, margin: 0 }}>✅</p>
             <p style={{ fontWeight: 'bold', fontSize: 18, color: '#1a1a1a' }}>Erfolgreich veröffentlicht!</p>
-            <p style={{ color: '#555' }}>
-              Dein Eintrag ist jetzt im Marktplatz sichtbar.
-            </p>
+            <p style={{ color: '#555' }}>Dein Eintrag ist jetzt im Marktplatz sichtbar.</p>
             <Link href="/inserate" style={styles.btnPrimary}>
               Alle Inserate ansehen →
             </Link>
@@ -194,6 +249,40 @@ export default function Home() {
               />
             </div>
 
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Bilder (max. {MAX_BILDER})</label>
+              <div style={styles.uploadArea}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleUpload}
+                  disabled={uploadLaden || bilder.length >= MAX_BILDER}
+                  style={styles.fileInput}
+                  id="fileUpload"
+                />
+                <label htmlFor="fileUpload" style={styles.uploadBtn}>
+                  {uploadLaden ? 'Wird hochgeladen...' : '📷 Bilder auswählen'}
+                </label>
+                {bilder.length > 0 && (
+                  <div style={styles.bilderVorschau}>
+                    {bilder.map((url) => (
+                      <div key={url} style={styles.bildWrapper}>
+                        <img src={url} style={styles.thumbnail} alt="" />
+                        <button
+                          type="button"
+                          style={styles.removeBtn}
+                          onClick={() => removeBild(url)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <p style={styles.sektion}>Deine Kontaktdaten</p>
 
             <div style={styles.formGroup}>
@@ -221,9 +310,9 @@ export default function Home() {
             {fehler && <p style={styles.fehler}>{fehler}</p>}
 
             <button
-              style={laden ? styles.btnSendenLaden : styles.btnSenden}
+              style={laden || uploadLaden ? styles.btnSendenLaden : styles.btnSenden}
               onClick={handleSubmit}
-              disabled={laden}
+              disabled={laden || uploadLaden}
             >
               {laden ? 'Wird gespeichert...' : rolle === 'suche' ? 'Suche absenden' : 'Inserat veröffentlichen'}
             </button>
@@ -374,6 +463,61 @@ const styles: Record<string, CSSProperties> = {
     color: '#1a1a1a',
     fontFamily: 'system-ui, sans-serif',
     resize: 'vertical',
+  },
+  uploadArea: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+  },
+  fileInput: {
+    display: 'none',
+  },
+  uploadBtn: {
+    padding: '12px 16px',
+    borderRadius: 10,
+    border: '1.5px dashed #cbd5e1',
+    background: '#fafafa',
+    color: '#1a1a1a',
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: 'pointer',
+    textAlign: 'center',
+  },
+  bilderVorschau: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  bildWrapper: {
+    position: 'relative',
+    width: 80,
+    height: 80,
+  },
+  thumbnail: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    borderRadius: 8,
+    border: '1px solid #e2e8f0',
+  },
+  removeBtn: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    borderRadius: '50%',
+    border: 'none',
+    background: '#e53e3e',
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 700,
+    cursor: 'pointer',
+    lineHeight: 1,
+    padding: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fehler: {
     color: '#e53e3e',

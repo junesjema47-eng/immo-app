@@ -15,6 +15,7 @@ type Inserat = {
   groesse: string | null
   zimmer: string | null
   beschreibung: string | null
+  bilder: string[] | null
 }
 
 type FilterWert = 'alle' | 'suche' | 'biete'
@@ -91,33 +92,45 @@ export default function Inserate() {
         <div style={styles.grid}>
           {gefiltert.map((i) => (
             <div key={i.id} style={styles.card}>
-              <div style={i.rolle === 'suche' ? styles.badgeSuche : styles.badgeBiete}>
-                {i.rolle === 'suche' ? '🔍 Sucht' : '🏢 Bietet'}
-              </div>
-              <h3 style={styles.cardTitel}>{i.immobilienart}</h3>
-              <p style={styles.cardOrt}>📍 {i.ort}</p>
-              <p style={styles.cardBudget}>
-                {i.rolle === 'suche' ? 'Budget' : 'Preis'}: {i.budget} €
-              </p>
-              {(i.groesse || i.zimmer) && (
-                <p style={styles.cardMeta}>
-                  {i.groesse && `${i.groesse} m²`}
-                  {i.groesse && i.zimmer && ' · '}
-                  {i.zimmer && `${i.zimmer} Zimmer`}
+              {i.bilder && i.bilder.length > 0 ? (
+                <div style={styles.imageWrapper}>
+                  <img src={i.bilder[0]} style={styles.cardImage} alt={i.immobilienart} />
+                  {i.bilder.length > 1 && (
+                    <span style={styles.imageCount}>+{i.bilder.length - 1}</span>
+                  )}
+                </div>
+              ) : (
+                <div style={styles.placeholderImage}>🏠</div>
+              )}
+              <div style={styles.cardContent}>
+                <div style={i.rolle === 'suche' ? styles.badgeSuche : styles.badgeBiete}>
+                  {i.rolle === 'suche' ? '🔍 Sucht' : '🏢 Bietet'}
+                </div>
+                <h3 style={styles.cardTitel}>{i.immobilienart}</h3>
+                <p style={styles.cardOrt}>📍 {i.ort}</p>
+                <p style={styles.cardBudget}>
+                  {i.rolle === 'suche' ? 'Budget' : 'Preis'}: {i.budget} €
                 </p>
-              )}
-              {i.beschreibung && (
-                <p style={styles.cardBeschreibung}>{i.beschreibung}</p>
-              )}
-              <div style={styles.cardKontakt}>
-                <a href={`mailto:${i.email}`} style={styles.kontaktLink}>
-                  📧 Kontaktieren
-                </a>
-                {i.telefon && (
-                  <a href={`tel:${i.telefon}`} style={styles.kontaktLink}>
-                    📞 {i.telefon}
-                  </a>
+                {(i.groesse || i.zimmer) && (
+                  <p style={styles.cardMeta}>
+                    {i.groesse && `${i.groesse} m²`}
+                    {i.groesse && i.zimmer && ' · '}
+                    {i.zimmer && `${i.zimmer} Zimmer`}
+                  </p>
                 )}
+                {i.beschreibung && (
+                  <p style={styles.cardBeschreibung}>{i.beschreibung}</p>
+                )}
+                <div style={styles.cardKontakt}>
+                  <a href={`mailto:${i.email}`} style={styles.kontaktLink}>
+                    📧 Kontaktieren
+                  </a>
+                  {i.telefon && (
+                    <a href={`tel:${i.telefon}`} style={styles.kontaktLink}>
+                      📞 {i.telefon}
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -211,8 +224,44 @@ const styles: Record<string, CSSProperties> = {
   card: {
     background: '#fff',
     borderRadius: 14,
-    padding: 20,
     boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  imageWrapper: {
+    position: 'relative',
+    width: '100%',
+    height: 180,
+    overflow: 'hidden',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  },
+  imageCount: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    padding: '4px 10px',
+    borderRadius: 20,
+    background: 'rgba(0,0,0,0.7)',
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 600,
+  },
+  placeholderImage: {
+    width: '100%',
+    height: 180,
+    background: '#f0f2f5',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 60,
+  },
+  cardContent: {
+    padding: 20,
     display: 'flex',
     flexDirection: 'column',
     gap: 8,
